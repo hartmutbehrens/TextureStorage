@@ -72,7 +72,7 @@ Window::Window()
   connect(timer, SIGNAL(timeout()), this, SLOT(rotateOneStep()));
   timer->start(20);
 
-  setWindowTitle(tr("Textures"));
+  setWindowTitle(tr("TextureStorage"));
 }
 
 void Window::setCurrentGlWidget()
