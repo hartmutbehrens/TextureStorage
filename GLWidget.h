@@ -44,8 +44,6 @@
 #include <QtWidgets>
 #include <QOpenGLFunctions>
 
-QT_FORWARD_DECLARE_CLASS(QGLShaderProgram);
-
 class GLWidget : public QOpenGLWidget, protected QOpenGLFunctions
 {
   Q_OBJECT
