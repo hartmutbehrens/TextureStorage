@@ -52,7 +52,6 @@ GLWidget::GLWidget(const QString& texturePath, QWidget *parent)
     zRot(0),
     rotIndex(0),
     program(0),
-    buffer(0),
     _texturePath(texturePath)
 {
 }
@@ -60,7 +59,6 @@ GLWidget::GLWidget(const QString& texturePath, QWidget *parent)
 GLWidget::~GLWidget()
 {
   makeCurrent();
-  free(buffer);
   texCoordBuffer.destroy();
   vertexBuffer.destroy();
   vao.destroy();
@@ -212,30 +210,28 @@ void GLWidget::paintGL()
   QMatrix4x4 n = m;
   n.scale(0.5, 0.5, 0.5);
 
-  GLint uboSize;
-  GLuint ubo;
   GLuint uboIndex = glGetUniformBlockIndex(program->programId(), "u_VertexData");
   if (uboIndex != GL_INVALID_INDEX) {
+    GLint uboSize;
     glGetActiveUniformBlockiv(program->programId(), uboIndex, GL_UNIFORM_BLOCK_DATA_SIZE, &uboSize);
-    if(buffer == 0) {
-      buffer = static_cast<float*>(malloc(uboSize));
-    }
 
-    memcpy(buffer, m.constData(), 16*sizeof(float));
-    memcpy(buffer + 16, n.constData(), 16*sizeof(float));
-
+    GLuint ubo;
     glGenBuffers(1, &ubo);
     glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-    glBufferData(GL_UNIFORM_BUFFER, uboSize, buffer, GL_STATIC_DRAW);
+    glBufferData(GL_UNIFORM_BUFFER, uboSize, NULL, GL_STATIC_DRAW);
+    //map the OpenGL buffer memory
+    void *buffer = glMapBufferRange(GL_UNIFORM_BUFFER, 0, uboSize, GL_MAP_WRITE_BIT);
+    memcpy(static_cast<float*>(buffer), m.constData(), 16*sizeof(float));
+    memcpy(static_cast<float*>(buffer) + 16, n.constData(), 16*sizeof(float));
     glBindBufferBase(GL_UNIFORM_BUFFER, uboIndex, ubo);
+    //done, unmap the buffer
+    glUnmapBuffer(GL_UNIFORM_BUFFER);
   }
   program->setUniformValue("rotIndex", rotIndex);
   program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
   program->enableAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE);
-  program->setAttributeArray
-      (PROGRAM_VERTEX_ATTRIBUTE, vertices.constData());
-  program->setAttributeArray
-      (PROGRAM_TEXCOORD_ATTRIBUTE, texCoords.constData());
+  program->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, vertices.constData());
+  program->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, texCoords.constData());
 
   texture->bind();
   for (int i = 0; i < 6; ++i) {

@@ -86,7 +86,6 @@ private:
   QOpenGLBuffer texCoordBuffer;
   QOpenGLVertexArrayObject vao;
   QOpenGLTexture* texture;
-  float* buffer;
 
   QString _texturePath;
 };
