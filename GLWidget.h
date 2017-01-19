@@ -85,14 +85,10 @@ private:
   QOpenGLBuffer vertexBuffer;
   QOpenGLBuffer texCoordBuffer;
   QOpenGLVertexArrayObject vao;
-  QOpenGLTexture* texture;
+  QOpenGLTexture* imageTexture;
+  QOpenGLTexture* storageTexture;
 
-  QString _texturePath;
-
-  GLuint ubo;
-  GLint uboSize;
-  GLuint uboIndex;
-  void *buffer;
+  QString texPath;
 };
 
 #endif

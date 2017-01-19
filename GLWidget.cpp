@@ -55,11 +55,9 @@ GLWidget::GLWidget(const QString& texturePath, QWidget *parent)
     zRot(0),
     rotIndex(0),
     program(0),
-    _texturePath(texturePath),
-    ubo(GL_INVALID_INDEX),
-    uboSize(-1),
-    uboIndex(GL_INVALID_INDEX),
-    buffer(NULL)
+    imageTexture(0),
+    storageTexture(0),
+    texPath(texturePath)
 {
 }
 
@@ -69,7 +67,8 @@ GLWidget::~GLWidget()
   texCoordBuffer.destroy();
   vertexBuffer.destroy();
   vao.destroy();
-  delete texture;
+  delete imageTexture;
+  delete storageTexture;
   delete program;
   doneCurrent();
 }
@@ -116,25 +115,14 @@ void GLWidget::initializeGL()
       "in vec2 texCoord;\n"
       "out vec2 texc;\n"
       "uniform int rotIndex;\n"
+      "uniform sampler2D storage;\n"
+      "mediump mat4 getRotationMatrix(int index);\n"
       "\n"
-      "int getRotoationIndex(void);\n"
-      "mediump mat4 getRotationMatrix(int Index);\n"
-      "mediump mat4 getRotationMatrix(void);\n"
-      "\n"
-      "struct VertexData {\n"
-      "  mediump mat4 rotMatrix;\n"
-      "};\n"
-      "layout(std140) uniform u_VertexData {\n"
-      "  VertexData vData[2];\n"
-      "};\n"
-      "\n"
-      "int getRotationIndex(void)                 { return rotIndex; }\n"
-      "mediump mat4 getRotationMatrix(int Index)  { return vData[Index].rotMatrix; }\n"
-      "mediump mat4 getRotationMatrix(void)       { return getRotationMatrix(getRotationIndex()); }\n"
+      "mediump mat4 getRotationMatrix(int index)  { return mat4(texelFetch(storage, ivec2(0,index), 0), texelFetch(storage, ivec2(1,index), 0), texelFetch(storage, ivec2(2,index), 0), texelFetch(storage, ivec2(3,index), 0)); }\n"
       "\n"
       "void main(void)\n"
       "{\n"
-      "    gl_Position = getRotationMatrix() * vertex;\n"
+      "    gl_Position = getRotationMatrix(rotIndex) * vertex;\n"
       "    texc = texCoord;\n"
       "}\n";
 
@@ -175,7 +163,6 @@ void GLWidget::initializeGL()
   program->link();
 
   program->bind();
-  program->setUniformValue("tex", 0);
 
   //create buffers
   vertexBuffer.create();
@@ -197,14 +184,15 @@ void GLWidget::initializeGL()
   program->setAttributeArray(program->attributeLocation("vertex"), vertices.constData());
   program->setAttributeArray(program->attributeLocation("texCoord"), texCoords.constData());
 
-  //create UBO
-  glGenBuffers(1, &ubo);
-  uboIndex = glGetUniformBlockIndex(program->programId(), "u_VertexData");
-  glGetActiveUniformBlockiv(program->programId(), uboIndex, GL_UNIFORM_BLOCK_DATA_SIZE, &uboSize);
-  glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-  glBufferData(GL_UNIFORM_BUFFER, uboSize, NULL, GL_STATIC_DRAW);
-  //map the OpenGL buffer memory
-  buffer = glMapBufferRange(GL_UNIFORM_BUFFER, 0, uboSize, GL_MAP_WRITE_BIT);
+  //bind the uniform samplers to texture units
+  program->setUniformValue("tex", 0);
+  program->setUniformValue("storage", 1);
+
+  //create texture used for storage
+  storageTexture->bind();
+  //create the storage for the texture
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 4, 2, 0, GL_RGBA, GL_FLOAT, NULL);
+  storageTexture->release();
 }
 
 void GLWidget::paintGL()
@@ -222,16 +210,17 @@ void GLWidget::paintGL()
   QMatrix4x4 n = m;
   n.scale(0.5, 0.5, 0.5);
 
-  if (uboIndex != GL_INVALID_INDEX) {
-    memcpy(static_cast<float*>(buffer), m.constData(), 16*sizeof(float));
-    memcpy(static_cast<float*>(buffer) + 16, n.constData(), 16*sizeof(float));
-    glBindBufferBase(GL_UNIFORM_BUFFER, uboIndex, ubo);
-    //done, unmap the buffer
-    glUnmapBuffer(GL_UNIFORM_BUFFER);
-  }
+  glActiveTexture(GL_TEXTURE1); // Texture unit 1
+  storageTexture->bind(GL_TEXTURE1);
+
+  //update storage texture
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 4, 1, GL_RGBA, GL_FLOAT, m.constData());
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 1, 4, 1, GL_RGBA, GL_FLOAT, n.constData());
+
   program->setUniformValue("rotIndex", rotIndex);
 
-  texture->bind();
+  glActiveTexture(GL_TEXTURE0); // Texture unit 0
+  imageTexture->bind(GL_TEXTURE0);
   for (int i = 0; i < 6; ++i) {
     glDrawArrays(GL_TRIANGLE_FAN, i * 4, 4);
   }
@@ -283,9 +272,14 @@ void GLWidget::makeObject()
     { { -1, -1, +1 }, { +1, -1, +1 }, { +1, +1, +1 }, { -1, +1, +1 } }
   };
 
-  texture = new QOpenGLTexture(QImage(_texturePath).mirrored());
-  texture->setMinificationFilter(QOpenGLTexture::LinearMipMapLinear);
-  texture->setMagnificationFilter(QOpenGLTexture::Linear);
+  imageTexture = new QOpenGLTexture(QImage(texPath).mirrored());
+  imageTexture->setMinificationFilter(QOpenGLTexture::LinearMipMapLinear);
+  imageTexture->setMagnificationFilter(QOpenGLTexture::Linear);
+
+  storageTexture = new QOpenGLTexture(QOpenGLTexture::Target2D);
+  //we're using this texture as storage, so do not want mipmapping
+  storageTexture->setMinificationFilter(QOpenGLTexture::Nearest);
+  storageTexture->setMagnificationFilter(QOpenGLTexture::Nearest);
 
   for (int i = 0; i < 6; ++i) {
     for (int j = 0; j < 4; ++j) {
