@@ -88,6 +88,11 @@ private:
   QOpenGLTexture* texture;
 
   QString _texturePath;
+
+  GLuint ubo;
+  GLint uboSize;
+  GLuint uboIndex;
+  void *buffer;
 };
 
 #endif
