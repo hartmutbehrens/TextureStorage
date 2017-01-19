@@ -44,6 +44,9 @@
 
 #include "GLWidget.h"
 
+#define PROGRAM_VERTEX_ATTRIBUTE 0
+#define PROGRAM_TEXCOORD_ATTRIBUTE 1
+
 GLWidget::GLWidget(const QString& texturePath, QWidget *parent)
   : QOpenGLWidget(parent),
     clearColor(Qt::black),
@@ -102,9 +105,6 @@ void GLWidget::initializeGL()
   glEnable(GL_CULL_FACE);
   glEnable(GL_TEXTURE_2D);
   glViewport(0, 0, width(), height());
-
-#define PROGRAM_VERTEX_ATTRIBUTE 0
-#define PROGRAM_TEXCOORD_ATTRIBUTE 1
 
   QOpenGLShader *vshader = new QOpenGLShader(QOpenGLShader::Vertex, this);
   QString vsrc =
@@ -188,11 +188,10 @@ void GLWidget::initializeGL()
   vao.create();
   vao.bind();
 
-  program->setAttributeBuffer(program->attributeLocation("vertex"), GL_FLOAT, 0, 3, sizeof(vertices));
-  program->setAttributeBuffer(program->attributeLocation("texCoord"), GL_FLOAT, 0, 2, sizeof(texCoords));
-
   program->enableAttributeArray(program->attributeLocation("vertex"));
   program->enableAttributeArray(program->attributeLocation("texCoord"));
+  program->setAttributeArray(program->attributeLocation("vertex"), vertices.constData());
+  program->setAttributeArray(program->attributeLocation("texCoord"), texCoords.constData());
 }
 
 void GLWidget::paintGL()
@@ -228,10 +227,6 @@ void GLWidget::paintGL()
     glUnmapBuffer(GL_UNIFORM_BUFFER);
   }
   program->setUniformValue("rotIndex", rotIndex);
-  program->enableAttributeArray(PROGRAM_VERTEX_ATTRIBUTE);
-  program->enableAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE);
-  program->setAttributeArray(PROGRAM_VERTEX_ATTRIBUTE, vertices.constData());
-  program->setAttributeArray(PROGRAM_TEXCOORD_ATTRIBUTE, texCoords.constData());
 
   texture->bind();
   for (int i = 0; i < 6; ++i) {
